@@ -11,6 +11,7 @@ Controls:
 import sys
 import math
 import pygame
+import random
 
 # -------------------------------------------------------------
 # 1. HARDWARE & DISPLAY CONSTANTS
@@ -48,14 +49,70 @@ HUB_ITEMS = [
     {"id": "settings",    "title": "SETTINGS",    "icon": "*"},
 ]
 
+SHUFFLE_ITEMS = [
+    {"id":"shuf_all", "title":"All Tracks", "icon":"A"},
+    {"id":"shuf_genres", "title":"By Genre", "icon":"G"},
+    {"id":"shuf_artists", "title":"By Artist", "icon":"A"},
+    {"id":"shuf_playlists", "title":"Playlists", "icon":"P"},
+    {"id":"shuf_fav", "title":"Favorites", "icon":"F"},
+    {"id":"back", "title":"< Back", "icon":"<"},
+]
+MUSIC_MENU_ITEMS = [
+    {"id":"back", "title":"< Back", "subtitle":"Return to home"},
+    {"id":"tracks", "title":"All Tracks", "subtitle":"16 songs (A-Z)"},
+    {"id":"alpha","title":"Quick Jump (A-Z)","subtitle":"7-screen latter orbit"},
+    {"id":"artists", "title":"Artists", "subtitle":"Browse by artist"},
+    {"id":"albums", "title":"Albums", "subtitle":"Browse by album"},
+    {"id":"playlists", "title":"Playlists", "subtitle":"Save M3U lists"},
+    {"id":"genres", "title":"Genres", "subtitle":"Synthwave . Pop , Idnie , Rock"},
+]
+    
+FILE_ITEMS = [
+    {"id":"back", "title":"< Back", "subtitle":"Return to home"},
+    {"id":"dir_1", "title":"[DIR] Synthwave/", "subtitle":"14 songs"},
+    {"id":"dir_2", "title":"[DIR] Lo-Fi/", "subtitle":"28 tracks"},
+    {"id":"dir_3", "title":"[DIR] Podcasts/", "subtitle":"4 episodes"},
+    {"id":"file_1", "title":"demo_master.flac", "subtitle":"24-bit • 48kHz"},
+]
+    
+BT_DEVICES = [
+    {"id":"back", "title":"< Back", "subtitle":"Return to home"},
+    {"id":"bt_pwr", "title":"Bluetooth Power", "subtitle":"Toggle radio"},
+    {"id":"bt_1", "title":"HEADPHONES-1234", "subtitle":"tap to connect"},
+    {"id":"bt_2", "title":"CAR-AUX-5678", "subtitle":"tap to connect"},
+    {"id":"bt_3", "title":"SPEAKER-ABCD", "subtitle":"tap to connect"},
+]
+
+EQ_PRESETS = ["Flat", "Bass Boost", "Treble Boost", "Vocal", "Rock"]   
+SLEEP_OPTIONS = ["Off", "5 min", "10 min", "15 min", "30 min", "60 min"]
+
 SAMPLE_TRACKS = [
-    {"title": "Midnight City", "artist": "M83", "duration": 243},
-    {"title": "Get Lucky", "artist": "Daft Punk", "duration": 248},
-    {"title": "Resonance", "artist": "HOME", "duration": 212},
-    {"title": "Starboy", "artist": "The Weeknd", "duration": 230},
-    {"title": "After Dark", "artist": "Mr.Kitty", "duration": 257},
-    {"title": "Blinding Lights", "artist": "The Weeknd", "duration": 200},
-    {"title": "Nightcall", "artist": "Kavinsky", "duration": 259},
+    {"title": "After Dark",      "artist": "Mr.Kitty",   "genre": "Synthwave", "duration": 257},
+    {"title": "Blinding Lights", "artist": "The Weeknd", "genre": "Pop",       "duration": 200},
+    {"title": "Cruel Summer",    "artist": "Taylor S.",  "genre": "Pop",       "duration": 178},
+    {"title": "Digital Love",    "artist": "Daft Punk",  "genre": "Electronic","duration": 298},
+    {"title": "Electric Feel",   "artist": "MGMT",       "genre": "Indie",     "duration": 229},
+    {"title": "Feels Like",      "artist": "Gracie A.",  "genre": "Pop",       "duration": 195},
+    {"title": "Get Lucky",       "artist": "Daft Punk",  "genre": "Funk",      "duration": 248},
+    {"title": "Heartless",       "artist": "The Weeknd", "genre": "R&B",       "duration": 198},
+    {"title": "Instant Crush",   "artist": "Daft Punk",  "genre": "Synthwave", "duration": 337},
+    {"title": "Just Dance",      "artist": "Lady Gaga",  "genre": "Pop",       "duration": 242},
+    {"title": "Kavinsky Drive",  "artist": "Kavinsky",   "genre": "Synthwave", "duration": 220},
+    {"title": "Levitating",      "artist": "Dua Lipa",   "genre": "Pop",       "duration": 203},
+    {"title": "Midnight City",   "artist": "M83",        "genre": "Synthwave", "duration": 243},
+    {"title": "Nightcall",       "artist": "Kavinsky",   "genre": "Synthwave", "duration": 259},
+    {"title": "Resonance",       "artist": "HOME",       "genre": "Synthwave", "duration": 212},
+    {"title": "Starboy",         "artist": "The Weeknd", "genre": "R&B",       "duration": 230},
+]
+
+ALPHA_PAGES = [
+    ["A", "B", "C", "D", ">", "BACK"],
+    ["E", "F", "G", "H", ">", "<"],
+    ["I", "J", "K", "L", ">", "<"],
+    ["M", "N", "O", "P", ">", "<"],
+    ["Q", "R", "S", "T", ">", "<"],
+    ["U", "V", "W", "X", ">", "<"],
+    ["Y", "Z", "#", "ALL", "BACK", "<"],
 ]
 
 class MyPodSimulator:
@@ -86,8 +143,25 @@ class MyPodSimulator:
         self.target_highlight_angle = -math.pi / 2
         self.departure_angle = -math.pi / 2  # The circle angle we are traveling FROM
         
+        self.shuffle_index = 0 
+        self.file_index = 0
+        self.bt_index = 0
+        self.settings_index = 0
+
+        self.bt_enabled = True
+        self.bt_connected = "AirPods Pro"
+        self.auto_brightness = True
+        self.haptic_click = True
+        self.eq_index = 0
+        self.sleep_index = 0
+
+        self.music_menu_index = 0
+
         # Song list state
         self.selected_song_index = 0
+        self.alpha_page = 0
+        self.alpha_node_index = 0
+        self.vinyl_angle = 0.0
         self.list_scroll_offset = 0
         
         # Playback state
@@ -107,7 +181,7 @@ class MyPodSimulator:
         
     def init_corner_mask(self):
         """Creates transparent cutouts for the 43px rounded screen edges."""
-        self.mask_surface.fill((0, 0, 0, 255))
+        self.mask_surface.fill((*COLOR_BEZEL, 255))
         rect = pygame.Rect(0, 0, NATIVE_WIDTH, NATIVE_HEIGHT)
         pygame.draw.rect(self.mask_surface, (0, 0, 0, 0), rect, border_radius=CORNER_RADIUS)
 
@@ -156,9 +230,39 @@ class MyPodSimulator:
             self.departure_angle = self.highlight_angle
             self.selected_hub_index = (self.selected_hub_index + 1) % len(HUB_ITEMS)
             self.target_highlight_angle = self.selected_hub_index * (2 * math.pi / len(HUB_ITEMS)) - (math.pi / 2)
+        
+        elif self.current_screen == "SHUFFLE_ORBIT":
+            self.departure_angle = self.highlight_angle
+            self.shuffle_index = (self.shuffle_index + 1) % len(SHUFFLE_ITEMS)
+            self.target_highlight_angle = self.shuffle_index * (2 * math.pi / len(SHUFFLE_ITEMS)) - (math.pi / 2)
+
+        elif self.current_screen == "ALPHA_ORBIT":
+            self.departure_angle = self.highlight_angle
+            self.alpha_node_index = (self.alpha_node_index + 1) % 6
+            self.target_highlight_angle = self.alpha_node_index * (2 * math.pi / 6) - (math.pi / 2)
+
+
+        elif self.current_screen == "MUSIC_MENU":
+            if self.music_menu_index < len(MUSIC_MENU_ITEMS) - 1:
+                self.music_menu_index += 1
+      
         elif self.current_screen == "SONG_LIST":
             if self.selected_song_index < len(SAMPLE_TRACKS) - 1:
                 self.selected_song_index += 1
+                if self.selected_song_index >= self.list_scroll_offset + 6:
+                    self.list_scroll_offset += 1
+
+
+        elif self.current_screen == "FILE_SCREEN":
+            if self.file_index < len(FILE_ITEMS) - 1:
+                self.file_index += 1
+        elif self.current_screen == "BT_SCREEN":
+            if self.bt_index < len(BT_DEVICES) - 1:
+                self.bt_index += 1
+        elif self.current_screen == "SETTINGS_SCREEN":
+            if self.settings_index < 4:
+                self.settings_index += 1
+
         elif self.current_screen == "NOW_PLAYING":
             self.volume = min(100, self.volume + 5)
 
@@ -167,9 +271,42 @@ class MyPodSimulator:
             self.departure_angle = self.highlight_angle
             self.selected_hub_index = (self.selected_hub_index - 1) % len(HUB_ITEMS)
             self.target_highlight_angle = self.selected_hub_index * (2 * math.pi / len(HUB_ITEMS)) - (math.pi / 2)
+        
+        elif self.current_screen == "SHUFFLE_ORBIT":
+            self.departure_angle = self.highlight_angle
+            self.shuffle_index = (self.shuffle_index - 1) % len(SHUFFLE_ITEMS)
+            self.target_highlight_angle = self.shuffle_index * (2 * math.pi / len(SHUFFLE_ITEMS)) - (math.pi / 2)
+
+        elif self.current_screen == "ALPHA_ORBIT":
+            self.departure_angle = self.highlight_angle
+            self.alpha_node_index = (self.alpha_node_index - 1) % 6
+            self.target_highlight_angle = self.alpha_node_index * (2 * math.pi / 6) - (math.pi / 2)
+
+        elif self.current_screen == "MUSIC_MENU":
+            if self.music_menu_index > 0:
+                self.music_menu_index -= 1
+       
         elif self.current_screen == "SONG_LIST":
             if self.selected_song_index > 0:
                 self.selected_song_index -= 1
+                if self.selected_song_index < self.list_scroll_offset:
+                    self.list_scroll_offset -= 1
+
+        elif self.current_screen == "ALPHA_ORBIT":
+            self.departure_angle = self.highlight_angle
+            self.alpha_node_index = (self.alpha_node_index - 1) % 6
+            self.target_highlight_angle = self.alpha_node_index * (2 * math.pi / 6) - (math.pi / 2)
+
+        elif self.current_screen == "FILE_SCREEN":
+            if self.file_index > 0:
+                self.file_index -= 1
+        elif self.current_screen == "BT_SCREEN":
+            if self.bt_index > 0:
+                self.bt_index -= 1
+        elif self.current_screen == "SETTINGS_SCREEN":
+            if self.settings_index > 0:
+                self.settings_index -= 1   
+
         elif self.current_screen == "NOW_PLAYING":
             self.volume = max(0, self.volume - 5)
 
@@ -177,25 +314,127 @@ class MyPodSimulator:
         if self.current_screen == "HOME_ORBIT":
             selected_id = HUB_ITEMS[self.selected_hub_index]["id"]
             if selected_id == "music":
-                self.current_screen = "SONG_LIST"
+                self.music_menu_index = 1
+                self.current_screen = "MUSIC_MENU"
             elif selected_id == "now_playing":
                 self.current_screen = "NOW_PLAYING"
             elif selected_id == "shuffle":
+                self.shuffle_index = 0
+                self.highlight_angle = -math.pi / 2
+                self.target_highlight_angle = -math.pi / 2
+                self.departure_angle = -math.pi / 2
+                self.current_screen = "SHUFFLE_ORBIT"
+            elif selected_id == "files":
+                self.file_index = 1
+                self.current_screen = "FILE_SCREEN"
+            elif selected_id == "bluetooth":
+                self.bt_index = 1
+                self.current_screen = "BT_SCREEN"
+            elif selected_id == "settings":
+                self.settings_index = 0
+                self.current_screen = "SETTINGS_SCREEN"
+
+        elif self.current_screen == "ALPHA_ORBIT":
+            val = ALPHA_PAGES[self.alpha_page][self.alpha_node_index]
+            if val == "BACK":
+                self.on_back_click()
+            elif val == ">":
+                self.alpha_page = (self.alpha_page + 1) % len(ALPHA_PAGES)
+            elif val == "<":
+                self.alpha_page = (self.alpha_page - 1) % len(ALPHA_PAGES)
+            elif val == "ALL":
                 self.selected_song_index = 0
+                self.list_scroll_offset = 0
+                self.current_screen = "SONG_LIST"
+            else:
+                target_idx = 0
+                for idx, tr in enumerate(SAMPLE_TRACKS):
+                    if tr["title"].upper().startswith(val) or tr["title"][0].upper() >= val:
+                        target_idx = idx
+                        break
+                self.selected_song_index = target_idx
+                self.list_scroll_offset = max(0, min(target_idx, len(SAMPLE_TRACKS) - 6))
+                self.current_screen = "SONG_LIST"
+
+         
+
+        elif self.current_screen == "SHUFFLE_ORBIT":
+            choice = SHUFFLE_ITEMS[self.shuffle_index]["id"]
+            if choice == "back":
+                self.on_back_click()
+            else:
+                self.current_track = random.choice(SAMPLE_TRACKS)
+                self.playback_time = 0.0
+                self.is_playing = True
                 self.current_screen = "NOW_PLAYING"
+
+        elif self.current_screen == "MUSIC_MENU":
+            choice = MUSIC_MENU_ITEMS[self.music_menu_index]["id"]
+            if choice == "back":
+                self.on_back_click()
+            elif choice == "tracks":
+                self.selected_song_index = 0
+                self.list_scroll_offset = 0
+                self.current_screen = "SONG_LIST"
+            elif choice == "alpha":
+                self.alpha_page = 0
+                self.alpha_node_index = 0
+                self.highlight_angle = -math.pi / 2
+                self.target_highlight_angle = -math.pi / 2
+                self.departure_angle = -math.pi / 2
+                self.current_screen = "ALPHA_ORBIT"
+         
         elif self.current_screen == "SONG_LIST":
             self.current_track = SAMPLE_TRACKS[self.selected_song_index]
             self.playback_time = 0.0
             self.is_playing = True
             self.current_screen = "NOW_PLAYING"
-        elif self.current_screen == "NOW_PLAYING":
-            self.is_playing = not self.is_playing
+        elif self.current_screen == "NOW_PLAYING": self.is_playing = not self.is_playing
+
+        elif self.current_screen == "FILE_SCREEN":
+            if FILE_ITEMS[self.file_index]["id"] == "back":
+                self.on_back_click()
+            elif FILE_ITEMS[self.file_index]["id"].startswith("dir_"):
+                self.selected_song_index = 0
+                self.current_screen = "SONG_LIST"
+
+        elif self.current_screen == "BT_SCREEN":
+            item_id = BT_DEVICES[self.bt_index]["id"]
+            if item_id == "back":
+                self.on_back_click()
+            elif item_id == "bt_pwr":
+                self.bt_enabled = not self.bt_enabled
+                if not self.bt_enabled:
+                    self.bt_connected = None
+            elif self.bt_enabled:
+                name = BT_DEVICES[self.bt_index]["title"]
+                self.bt_connected = None if self.bt_connected == name else name
+
+        elif self.current_screen == "SETTINGS_SCREEN":
+            if self.settings_index == 0:
+                self.on_back_click()
+            elif self.settings_index == 1:
+                self.auto_brightness = not self.auto_brightness
+            elif self.settings_index == 2:
+                self.haptic_click = not self.haptic_click
+            elif self.settings_index == 3:
+                self.eq_index = (self.eq_index + 1) % len(EQ_PRESETS)
+            elif self.settings_index == 4:
+                self.sleep_index = (self.sleep_index + 1) % len(SLEEP_OPTIONS)
+    
 
     def on_back_click(self):
         if self.current_screen == "SONG_LIST":
+            self.current_screen = "MUSIC_MENU"
+        elif self.current_screen in ["SHUFFLE_ORBIT", "MUSIC_MENU", "NOW_PLAYING", "FILE_SCREEN", "BT_SCREEN", "SETTINGS_SCREEN"]:
+     
+            self.highlight_angle = self.selected_hub_index * (2 * math.pi / len(HUB_ITEMS)) - (math.pi / 2)
+            self.target_highlight_angle = self.highlight_angle
+            self.departure_angle = self.highlight_angle
             self.current_screen = "HOME_ORBIT"
-        elif self.current_screen == "NOW_PLAYING":
-            self.current_screen = "HOME_ORBIT"
+
+        if self.current_screen == "ALPHA_ORBIT":
+            self.current_screen = "MUSIC_MENU"
 
     def update(self):
         # Smooth interpolation for highlighter angle (shortest angular distance)
@@ -206,9 +445,12 @@ class MyPodSimulator:
         if self.is_playing and self.current_screen == "NOW_PLAYING":
             self.playback_time = min(float(self.current_track["duration"]), self.playback_time + 1/60)
 
+        if self.is_playing :
+            self.vinyl_angle += 0.04
     # ---------------------------------------------------------
     # RENDERING ENGINE
     # ---------------------------------------------------------
+
     def render(self):
         # 1. Clear native buffer
         self.screen_buffer.fill(COLOR_BG)
@@ -216,17 +458,28 @@ class MyPodSimulator:
         # 2. Render active screen content
         if self.current_screen == "HOME_ORBIT":
             self.render_home_orbit()
+        elif self.current_screen == "SHUFFLE_ORBIT":
+            self.render_shuffle_orbit()
+        elif self.current_screen == "MUSIC_MENU":
+            self.render_music_menu()
         elif self.current_screen == "SONG_LIST":
             self.render_song_list()
         elif self.current_screen == "NOW_PLAYING":
             self.render_now_playing()
-
+        elif self.current_screen == "FILE_SCREEN":
+            self.render_file_screen()
+        elif self.current_screen == "BT_SCREEN":
+            self.render_bt_screen()
+        elif self.current_screen == "SETTINGS_SCREEN":
+            self.render_settings_screen()
+        elif self.current_screen == "ALPHA_ORBIT":
+            self.render_alpha_orbit()
         # 3. Render Status Bar on top
         self.render_status_bar()
 
         # 4. Apply 43px rounded corners mask
         # We fill outside the mask with bezel color
-        bezel_masked = self.screen_buffer.copy()
+        self.screen_buffer.blit(self.mask_surface, (0, 0))
         
         # 5. Blit to main desktop window with scale and chassis
         self.window.fill(COLOR_CHASSIS)
@@ -262,16 +515,21 @@ class MyPodSimulator:
 
         # Time
         time_surf = self.font_small.render("12:45", True, COLOR_TEXT_MUTED)
-        self.screen_buffer.blit(time_surf, (14, 5))
+        self.screen_buffer.blit(time_surf, (16, 5))
 
         # Waveform mini-player if playing
         if self.is_playing:
-            wf = self.font_tiny.render("ılı", True, COLOR_AMBER)
-            self.screen_buffer.blit(wf, (NATIVE_WIDTH // 2 - wf.get_width() // 2, 6))
+            t = pygame.time.get_ticks() / 150.0
+            for b in range(3):
+                bar_h = int(4 + 5 * abs(math.sin(t + b * 1.1)))
+                bx = (NATIVE_WIDTH // 2) - 6 + (b * 5)
+                by = 16 - bar_h
+                pygame.draw.rect(self.screen_buffer, COLOR_AMBER, (bx, by, 3, bar_h), border_radius=1)
 
-        # Battery & BT
-        bat_surf = self.font_small.render("92% [BT]", True, COLOR_TEXT_MUTED)
-        self.screen_buffer.blit(bat_surf, (NATIVE_WIDTH - bat_surf.get_width() - 14, 5))
+        bat_x, bat_y = NATIVE_WIDTH - 36, 7
+        pygame.draw.rect(self.screen_buffer, COLOR_TEXT_MUTED, (bat_x, bat_y, 18, 9), 1, border_radius=2)
+        pygame.draw.rect(self.screen_buffer, COLOR_TEXT_MUTED, (bat_x + 18, bat_y + 2, 2, 5))
+        pygame.draw.rect(self.screen_buffer, COLOR_AMBER, (bat_x + 2, bat_y + 2, 13, 5), border_radius=1)
 
     def render_home_orbit(self):
         """Screen 1: Stationary Circular Hub with Morphing Track Highlighter."""
@@ -382,38 +640,240 @@ class MyPodSimulator:
         hint = self.font_tiny.render("ROTATE TO SELECT", True, (80, 90, 105))
         self.screen_buffer.blit(hint, (center_x - hint.get_width() // 2, NATIVE_HEIGHT - 22))
 
+    def render_shuffle_orbit(self):
+        """Smart Shuffle Radial Orbit Screen."""
+        center_x, center_y, orbit_radius = NATIVE_WIDTH // 2, 150, 65
+        total_nodes = len(SHUFFLE_ITEMS)
+        step_angle = 2 * math.pi / total_nodes
+
+        # Header label
+        hdr = self.font_tiny.render("SMART SHUFFLE", True, COLOR_TEXT_MUTED)
+        self.screen_buffer.blit(hdr, (center_x - hdr.get_width() // 2, 26))
+
+        pygame.draw.circle(self.screen_buffer, (35, 42, 54), (center_x, center_y), orbit_radius, 2)
+
+        diff_to_target = abs((self.target_highlight_angle - self.highlight_angle + math.pi) % (2 * math.pi) - math.pi)
+        transit_factor = math.sin(math.pi * min(1.0, diff_to_target / step_angle))
+        hl_radius = 19.0 - (13.0 * (transit_factor ** 0.8))
+        hl_x = center_x + orbit_radius * math.cos(self.highlight_angle)
+        hl_y = center_y + orbit_radius * math.sin(self.highlight_angle)
+
+        diff_from_dep = (self.highlight_angle - self.departure_angle + math.pi) % (2 * math.pi) - math.pi
+        if abs(diff_from_dep) > 0.03 and transit_factor > 0.05:
+            trail_pts = [
+                (
+                    center_x + orbit_radius * math.cos(self.departure_angle + diff_from_dep * (k / 15.0)),
+                    center_y + orbit_radius * math.sin(self.departure_angle + diff_from_dep * (k / 15.0)),
+                )
+                for k in range(16)
+            ]
+            pygame.draw.lines(self.screen_buffer, COLOR_AMBER, False, trail_pts, 3)
+
+        for i, item in enumerate(SHUFFLE_ITEMS):
+            ang = i * step_angle - (math.pi / 2)
+            nx, ny = center_x + orbit_radius * math.cos(ang), center_y + orbit_radius * math.sin(ang)
+            is_target = (i == self.shuffle_index)
+            node_r = int(13 + 3 * (1.0 - transit_factor)) if is_target else 13
+            node_color = COLOR_AMBER if (is_target and transit_factor < 0.25) else COLOR_CARD
+            text_color = (0, 0, 0) if (is_target and transit_factor < 0.25) else COLOR_TEXT_MUTED
+
+            pygame.draw.circle(self.screen_buffer, node_color, (int(nx), int(ny)), node_r)
+            pygame.draw.circle(self.screen_buffer, COLOR_DIVIDER, (int(nx), int(ny)), node_r, 1)
+            icon_surf = self.font_mid.render(item["icon"], True, text_color)
+            self.screen_buffer.blit(icon_surf, (int(nx) - icon_surf.get_width() // 2, int(ny) - icon_surf.get_height() // 2))
+
+        if transit_factor > 0.3:
+            pygame.draw.circle(self.screen_buffer, COLOR_AMBER, (int(hl_x), int(hl_y)), int(hl_radius))
+        else:
+            pygame.draw.circle(self.screen_buffer, COLOR_AMBER, (int(hl_x), int(hl_y)), int(hl_radius), 2)
+
+        selected = SHUFFLE_ITEMS[self.shuffle_index]
+        pygame.draw.circle(self.screen_buffer, (20, 24, 30), (center_x, center_y), 32)
+        pygame.draw.circle(self.screen_buffer, COLOR_AMBER, (center_x, center_y), 32, 2)
+        hub_text = self.font_tiny.render(selected["title"], True, COLOR_AMBER)
+        self.screen_buffer.blit(hub_text, (center_x - hub_text.get_width() // 2, center_y - hub_text.get_height() // 2))
+
+    def render_music_menu(self):
+        """Music Library Sub-Menu (Vertical List)."""
+        header_surf = self.font_mid.render("Music Library", True, COLOR_AMBER)
+        self.screen_buffer.blit(header_surf, (26, 28))
+
+        row_y = 54
+        row_height = 32
+        for i, item in enumerate(MUSIC_MENU_ITEMS):
+            is_selected = (i == self.music_menu_index)
+            pill_rect = pygame.Rect(10, row_y, NATIVE_WIDTH - 20, row_height - 4)
+            if is_selected:
+                pygame.draw.rect(self.screen_buffer, COLOR_AMBER, pill_rect, border_radius=6)
+                t_col, s_col = (0, 0, 0), (40, 40, 40)
+            else:
+                t_col, s_col = COLOR_TEXT_WHITE, COLOR_TEXT_MUTED
+
+            self.screen_buffer.blit(self.font_small.render(item["title"], True, t_col), (18, row_y + 2))
+            self.screen_buffer.blit(self.font_tiny.render(item["subtitle"], True, s_col), (18, row_y + 15))
+            row_y += row_height
+
+    def render_file_screen(self):
+        """File Browser Sub-Menu (Vertical List)."""
+        header_surf = self.font_mid.render("File (SD)", True, COLOR_AMBER)
+        self.screen_buffer.blit(header_surf, (26, 28))
+
+        row_y = 54
+        row_height = 32
+        for i, item in enumerate(FILE_ITEMS):
+            is_selected = (i == self.file_index)
+            pill_rect = pygame.Rect(10, row_y, NATIVE_WIDTH - 20, row_height - 4)
+            if is_selected:
+                pygame.draw.rect(self.screen_buffer, COLOR_AMBER, pill_rect, border_radius=6)
+                t_col, s_col = (0, 0, 0), (40, 40, 40)
+            else:
+                t_col, s_col = COLOR_TEXT_WHITE, COLOR_TEXT_MUTED
+
+            self.screen_buffer.blit(self.font_small.render(item["title"], True, t_col), (18, row_y + 2))
+            self.screen_buffer.blit(self.font_tiny.render(item["subtitle"], True, s_col), (18, row_y + 15))
+            row_y += row_height
+
+    def render_bt_screen(self):
+        """Bluetooth Sub-Menu (Vertical List)."""
+        header_surf = self.font_mid.render("Bluetooth", True, COLOR_AMBER)
+        self.screen_buffer.blit(header_surf, (26, 28))
+
+        row_y = 54
+        row_height = 32
+        for i, item in enumerate(BT_DEVICES):
+            is_selected = (i == self.bt_index)
+            pill_rect = pygame.Rect(10, row_y, NATIVE_WIDTH - 20, row_height - 4)
+            if is_selected:
+                pygame.draw.rect(self.screen_buffer, COLOR_AMBER, pill_rect, border_radius=6)
+                t_col, s_col = (0, 0, 0), (40, 40, 40)
+            else:
+                t_col, s_col = COLOR_TEXT_WHITE, COLOR_TEXT_MUTED
+
+            subtitle = item["subtitle"]
+            if item["id"] == "bt_pwr":
+                subtitle = "ON" if self.bt_enabled else "OFF"
+            elif item["title"] == self.bt_connected and self.bt_enabled:
+                subtitle = "CONNECTED"
+
+            self.screen_buffer.blit(self.font_small.render(item["title"], True, t_col), (18, row_y + 2))
+            self.screen_buffer.blit(self.font_tiny.render(subtitle, True, s_col), (18, row_y + 15))
+            row_y += row_height
+
+    def render_settings_screen(self):
+        """Settings Sub-Menu (Vertical List)."""
+        header_surf = self.font_mid.render("Settings", True, COLOR_AMBER)
+        self.screen_buffer.blit(header_surf, (26, 28))
+
+        rows = [
+            ("< Back", "Return to Home"),
+            ("Auto Brightness", "ON (LDR)" if self.auto_brightness else "OFF (Manual)"),
+            ("Haptic Click", "ON (Haptic)" if self.haptic_click else "OFF"),
+            ("EQ Preset", EQ_PRESETS[self.eq_index]),
+            ("Sleep Timer", SLEEP_OPTIONS[self.sleep_index]),
+        ]
+
+        row_y = 54
+        row_height = 32
+        for i, (title, val) in enumerate(rows):
+            is_selected = (i == self.settings_index)
+            pill_rect = pygame.Rect(10, row_y, NATIVE_WIDTH - 20, row_height - 4)
+            if is_selected:
+                pygame.draw.rect(self.screen_buffer, COLOR_AMBER, pill_rect, border_radius=6)
+                t_col, s_col = (0, 0, 0), (40, 40, 40)
+            else:
+                t_col, s_col = COLOR_TEXT_WHITE, COLOR_TEXT_MUTED
+
+            self.screen_buffer.blit(self.font_small.render(title, True, t_col), (18, row_y + 2))
+            self.screen_buffer.blit(self.font_tiny.render(val, True, s_col), (18, row_y + 15))
+            row_y += row_height 
+
+    def render_alpha_orbit(self):
+        center_x, center_y, orbit_radius = NATIVE_WIDTH // 2, 150, 65
+        nodes = ALPHA_PAGES[self.alpha_page]
+        step_angel = 2 * math.pi / 6
+
+        hdr = self.font_tiny.render(f"JUMP A-Z ({self.alpha_page + 1}/7)", True, COLOR_TEXT_MUTED)
+        self.screen_buffer.blit(hdr, (center_x - hdr.get_width() // 2, 26))
+
+        pygame.draw.circle(self.screen_buffer, (35, 42, 54), (center_x, center_y), orbit_radius, 2)
+
+        diff_to_target = abs((self.target_highlight_angle - self.highlight_angle + math.pi) % (2 * math.pi) - math.pi)
+        transit_factor = math.sin(math.pi * min(1.0, diff_to_target / step_angel))
+        hl_radius = 19.0 - (13.0 * (transit_factor ** 0.8))
+        hl_x = center_x + orbit_radius * math.cos(self.highlight_angle)
+        hl_y = center_y + orbit_radius * math.sin(self.highlight_angle)
+
+        diff_from_dep = (self.highlight_angle - self.departure_angle + math.pi) % (2 * math.pi) - math.pi
+        if abs(diff_from_dep) > 0.03 and transit_factor > 0.05:
+            trail_pts = [
+                (
+                    center_x + orbit_radius * math.cos(self.departure_angle + diff_from_dep * (k / 15.0)),
+                    center_y + orbit_radius * math.sin(self.departure_angle + diff_from_dep * (k / 15.0)),
+                )
+                for k in range(16)
+            ]
+            pygame.draw.lines(self.screen_buffer, COLOR_AMBER, False, trail_pts, 3)
+
+        for i, label in enumerate(nodes):
+            ang = i * step_angel - (math.pi / 2)
+            nx, ny = center_x + orbit_radius * math.cos(ang), center_y + orbit_radius * math.sin(ang)
+            is_target = (i == self.alpha_node_index)
+            node_r = int(13 + 3 * (1.0 - transit_factor)) if is_target else 13
+            node_color = COLOR_AMBER if (is_target and transit_factor < 0.25) else COLOR_CARD
+            text_color = (0, 0, 0) if (is_target and transit_factor < 0.25) else COLOR_TEXT_MUTED
+
+            pygame.draw.circle(self.screen_buffer, node_color, (int(nx), int(ny)), node_r)
+            pygame.draw.circle(self.screen_buffer, COLOR_DIVIDER, (int(nx), int(ny)), node_r, 1)
+            short_lbl = "<" if label == "BACK" else label
+            txt = self.font_tiny.render(short_lbl, True, text_color)
+            self.screen_buffer.blit(txt, (int(nx) - txt.get_width() // 2, int(ny) - txt.get_height() // 2))
+
+        if transit_factor > 0.3:
+            pygame.draw.circle(self.screen_buffer, COLOR_AMBER, (int(hl_x), int(hl_y)), int(hl_radius))
+        else:
+            pygame.draw.circle(self.screen_buffer, COLOR_AMBER, (int(hl_x), int(hl_y)), int(hl_radius), 2)
+
+        selected = nodes[self.alpha_node_index]
+        pygame.draw.circle(self.screen_buffer, (20, 24, 30), (center_x, center_y), 32)
+        pygame.draw.circle(self.screen_buffer, COLOR_AMBER, (center_x, center_y), 32, 2)
+        hub_text = self.font_mid.render(selected, True, COLOR_AMBER)
+        self.screen_buffer.blit(hub_text, (center_x - hub_text.get_width() // 2, center_y - hub_text.get_height() // 2))
+
     def render_song_list(self):
         """Screen 2: Clean Vertical Song Browser."""
         # Header
         header_surf = self.font_mid.render("Tracks (A-Z)", True, COLOR_AMBER)
-        self.screen_buffer.blit(header_surf, (14, 28))
+        self.screen_buffer.blit(header_surf, (26, 28))
 
         row_y = 52
-        row_height = 30
-        visible_rows = 7
+        row_height = 32
+        visible_rows = 6
+        visible_tracks = SAMPLE_TRACKS[self.list_scroll_offset:self.list_scroll_offset + visible_rows]
 
-        for i, track in enumerate(SAMPLE_TRACKS):
-            is_selected = (i == self.selected_song_index)
-            pill_rect = pygame.Rect(10, row_y, NATIVE_WIDTH - 20, row_height - 4)
+        for idx, track in enumerate(visible_tracks):
+            actual_i = self.list_scroll_offset + idx
+            is_selected = (actual_i == self.selected_song_index)
+            pill_rect = pygame.Rect(10, row_y, NATIVE_WIDTH - 28, row_height - 4)
 
             if is_selected:
                 pygame.draw.rect(self.screen_buffer, COLOR_AMBER, pill_rect, border_radius=6)
-                title_color = (0, 0, 0)
-                artist_color = (40, 40, 40)
+                title_color ,  artist_color = (0, 0, 0) ,(40, 40, 40)
+               
             else:
-                title_color = COLOR_TEXT_WHITE
-                artist_color = COLOR_TEXT_MUTED
-
-            # Track Title
-            title_surf = self.font_small.render(track["title"], True, title_color)
-            self.screen_buffer.blit(title_surf, (18, row_y + 2))
-
-            # Artist
-            artist_surf = self.font_tiny.render(track["artist"], True, artist_color)
-            self.screen_buffer.blit(artist_surf, (18, row_y + 14))
-
+                title_color ,artist_color = COLOR_TEXT_WHITE , COLOR_TEXT_MUTED
+            
+            self.screen_buffer.blit(self.font_small.render(track["title"], True, title_color), (18, row_y + 2))
+            self.screen_buffer.blit(self.font_tiny.render(track["artist"], True, artist_color), (18, row_y + 15))
             row_y += row_height
 
+        if len(SAMPLE_TRACKS) > visible_rows:
+            sb_x, sb_y, sb_h = NATIVE_WIDTH - 12, 56, visible_rows * row_height - 8
+            pygame.draw.rect(self.screen_buffer, (30, 36, 46), (sb_x, sb_y, 3, sb_h), border_radius=2)
+            thumb_h = max(14, int(sb_h * (visible_rows / len(SAMPLE_TRACKS))))
+            max_scroll = len(SAMPLE_TRACKS) - visible_rows
+            thumb_y = sb_y + int((sb_h - thumb_h) * (self.list_scroll_offset / max_scroll))
+            pygame.draw.rect(self.screen_buffer, COLOR_AMBER, (sb_x, thumb_y, 3, thumb_h), border_radius=2)
+                
     def render_now_playing(self):
         """Screen 3: The Now Playing Crown Jewel."""
         center_x = NATIVE_WIDTH // 2
@@ -428,8 +888,16 @@ class MyPodSimulator:
         pygame.draw.rect(self.screen_buffer, (60, 70, 85), art_rect, 1, border_radius=12)
 
         # Vinyl center disc decoration
-        pygame.draw.circle(self.screen_buffer, (18, 22, 28), (center_x, 101), 24)
-        pygame.draw.circle(self.screen_buffer, COLOR_AMBER, (center_x, 101), 6)
+        
+
+        pygame.draw.circle(self.screen_buffer, (18, 22, 28), (center_x, 101), 36)
+        pygame.draw.circle(self.screen_buffer,(45,52,65), (center_x,101),26,1)
+        for s in range(2):
+            ang = self.vinyl_angle + s * math.pi
+            sx = center_x + int(30 * math.cos(ang))
+            sy = 101 + int(30 * math.sin(ang))
+            pygame.draw.line(self.screen_buffer,COLOR_AMBER_DARK ,(center_x,101) , (sx,sy),2)
+            pygame.draw.circle(self.screen_buffer,COLOR_AMBER,(center_x ,101), 7)
 
         # Track Title & Artist
         title_surf = self.font_mid.render(self.current_track["title"], True, COLOR_TEXT_WHITE)
