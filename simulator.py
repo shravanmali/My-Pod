@@ -20,9 +20,9 @@ NATIVE_WIDTH = 240
 NATIVE_HEIGHT = 280
 CORNER_RADIUS = 43     # 4-R5 mm = ~43px on 0.1165mm pitch
 
-SCALE = 2.5            # Scale factor for comfortable desktop viewing
-WINDOW_WIDTH = int(NATIVE_WIDTH * SCALE) + 80   # Extra margin for wooden chassis frame
-WINDOW_HEIGHT = int(NATIVE_HEIGHT * SCALE) + 80
+SCALE = 0.65           # 0.65 = ~1:1 real 1.69" size on 1080p laptop (2.5 = zoomed view)
+WINDOW_WIDTH = max(420, int(NATIVE_WIDTH * SCALE) + 80)   # Extra margin for wooden chassis frame
+WINDOW_HEIGHT = max(340, int(NATIVE_HEIGHT * SCALE) + 80)
 
 # -------------------------------------------------------------
 # 2. COLOR PALETTE (Theme A: Studio Dark)
@@ -115,6 +115,8 @@ ALPHA_PAGES = [
     ["Y", "Z", "#", "ALL", "BACK", "<"],
 ]
 
+
+
 class MyPodSimulator:
     def __init__(self):
         pygame.init()
@@ -133,8 +135,8 @@ class MyPodSimulator:
         # Typography
         self.font_large = pygame.font.SysFont("segoeui,helvetica,arial", 18, bold=True)
         self.font_mid   = pygame.font.SysFont("segoeui,helvetica,arial", 13, bold=True)
-        self.font_small = pygame.font.SysFont("segoeui,helvetica,arial", 10)
-        self.font_tiny  = pygame.font.SysFont("segoeui,helvetica,arial", 8, bold=True)
+        self.font_small = pygame.font.SysFont("segoeui,helvetica,arial", 12, bold=True)
+        self.font_tiny  = pygame.font.SysFont("segoeui,helvetica,arial", 10, bold=True)
 
         # State Machine
         self.current_screen = "HOME_ORBIT"   # "HOME_ORBIT", "SONG_LIST", "NOW_PLAYING"
@@ -169,6 +171,9 @@ class MyPodSimulator:
         self.is_playing = True
         self.playback_time = 45.0
         self.volume = 75
+        self.scale = 2.5
+        self.overlay_mode = None
+        self.overlay_timer = 0
 
         # Icon Images (Loaded from assets/)
         self.icons = {}
@@ -216,16 +221,65 @@ class MyPodSimulator:
             self.on_rotate_counter_clockwise()
 
     def handle_keydown(self, key):
-        if key in (pygame.K_DOWN, pygame.K_RIGHT):
+        if key == pygame.K_RIGHT:
+            if self.current_screen == "NOW_PLAYING" :
+                self.next_track()
+            else:
+                self.on_rotate_clockwise()
+        elif key == pygame.K_LEFT :
+            if self.current_screen == "NOW_PLAYING" :
+                self.prev_track()
+            else :
+                self.on_rotate_counter_clockwise()
+        elif key == pygame.K_DOWN :
             self.on_rotate_clockwise()
-        elif key in (pygame.K_UP, pygame.K_LEFT):
+        elif key == pygame.K_UP :
             self.on_rotate_counter_clockwise()
         elif key in (pygame.K_RETURN, pygame.K_SPACE):
             self.on_center_click()
-        elif key in (pygame.K_BACKSPACE, pygame.K_ESCAPE):
+        elif key == pygame.K_h:
+            self.highlight_angle = self.selected_hub_index * (2 * math.pi / len(HUB_ITEMS)) - (math.pi / 2)
+            self.target_highlight_angle = self.highlight_angle
+            self.departure_angle = self.highlight_angle
+            self.departure_angle = self.highlight_angle
+            self.current_screen = "HOME_ORBIT"
+        elif key == pygame.K_r:
+            self.scale = 0.65 if self.scale > 1.0 else 2.5
+            w = max(420 , int(NATIVE_WIDTH * self.scale) + 80)
+            h = max(340, int(NATIVE_HEIGHT * self.scale) + 80 )
+            self.window = pygame.display.set_mode((w,h))
+        elif key in (pygame.K_BACKSPACE , pygame.K_ESCAPE):
             self.on_back_click()
 
+    def next_track(self):
+        self.selected_song_index = (self.selected_song_index + 1) % len(SAMPLE_TRACKS) 
+        self.current_track = SAMPLE_TRACKS[self.selected_song_index]
+        self.playback_time = 0.0
+        self.is_playing = True 
+
+    def prev_track(self):
+        self.selected_song_index = (self.selected_song_index -1 ) % len(SAMPLE_TRACKS)
+        self.current_track = SAMPLE_TRACKS[self.selected_song_index]
+        self.playback_time = 0.0
+        self.is_playing = True 
+        
+            
+
+
     def on_rotate_clockwise(self):
+
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_v]:
+            self.volume = min(100, self.volume + 5)
+            self.overlay_mode = "VOL"
+            self.overlay_timer = 90
+            return
+        if keys[pygame.K_s]:
+            self.playback_time = min(float(self.current_track["duration"] ), self.playback_time + 5.0)
+            self.overlay_mode = "SEEK"
+            self.overlay_timer = 90
+            return  
+
         if self.current_screen == "HOME_ORBIT":
             self.departure_angle = self.highlight_angle
             self.selected_hub_index = (self.selected_hub_index + 1) % len(HUB_ITEMS)
@@ -265,6 +319,18 @@ class MyPodSimulator:
 
         elif self.current_screen == "NOW_PLAYING":
             self.volume = min(100, self.volume + 5)
+
+            keys = pygame.key.get_pressed()
+            if keys[pygame.K_v]:
+                self.volume = max(0 , self.volume - 5)
+                self.overlay_mode = "VOL"
+                self.overlay_timer = 90
+                return
+            if keys[pygame.K_s]:
+                self.playback_time = max(0.0 , self.playback_time - 5.0)
+                self.overlay_mode = "SEEK"
+                self.overlay_timer = 90
+                return  
 
     def on_rotate_counter_clockwise(self):
         if self.current_screen == "HOME_ORBIT":
@@ -447,6 +513,9 @@ class MyPodSimulator:
 
         if self.is_playing :
             self.vinyl_angle += 0.04
+        if self.overlay_timer > 0:
+            self.overlay_timer -= 1
+
     # ---------------------------------------------------------
     # RENDERING ENGINE
     # ---------------------------------------------------------
@@ -476,6 +545,8 @@ class MyPodSimulator:
             self.render_alpha_orbit()
         # 3. Render Status Bar on top
         self.render_status_bar()
+        if self.overlay_timer > 0:
+            self.render_overlay()
 
         # 4. Apply 43px rounded corners mask
         # We fill outside the mask with bezel color
@@ -484,15 +555,17 @@ class MyPodSimulator:
         # 5. Blit to main desktop window with scale and chassis
         self.window.fill(COLOR_CHASSIS)
         
-        # Scaled LCD display (crisp pixel-sharp scaling without bilinear blur)
-        scaled_lcd = pygame.transform.scale(
+        # Scaled LCD display (use smoothscale when shrinking below 1.0x so text doesn't drop pixels)
+        scale_fn = pygame.transform.smoothscale if SCALE < 1.0 else pygame.transform.scale
+        scaled_lcd = scale_fn(
             self.screen_buffer, 
             (int(NATIVE_WIDTH * SCALE), int(NATIVE_HEIGHT * SCALE))
         )
         
         # Position centered inside wooden chassis
-        screen_x = (WINDOW_WIDTH - scaled_lcd.get_width()) // 2
-        screen_y = (WINDOW_HEIGHT - scaled_lcd.get_height()) // 2
+        win_w ,win_h = self.window.get_size()
+        screen_x = (win_w - scaled_lcd.get_width()) // 2
+        screen_y = (win_h - scaled_lcd.get_height()) // 2
         
         # Glass bezel border
         bezel_rect = pygame.Rect(
@@ -504,10 +577,36 @@ class MyPodSimulator:
         self.window.blit(scaled_lcd, (screen_x, screen_y))
 
         # Instructions banner at bottom
-        hint = self.font_small.render("Turn Wheel / Arrow Keys • Click Enter / Space • Back: Backspace", True, (160, 140, 120))
-        self.window.blit(hint, ((WINDOW_WIDTH - hint.get_width()) // 2, WINDOW_HEIGHT - 28))
+        hint = self.font_tiny.render("Wheel : Scroll | V+Wheel : Vol | S+Wheel : Seek | H:Home | R: 1:1 size",  True, (160, 140, 120))
+        self.window.blit(hint, ((win_w - hint.get_width()) // 2, win_h - 24))
 
         pygame.display.flip()
+
+    def render_overlay(self):
+        box_w, box_h = 164, 42
+        box_x = (NATIVE_WIDTH - box_w) // 2
+        box_y = NATIVE_HEIGHT - 64
+
+        pygame.draw.rect(self.screen_buffer, (20, 24, 30), (box_x, box_y, box_w, box_h), border_radius=10)
+        pygame.draw.rect(self.screen_buffer, COLOR_AMBER, (box_x, box_y, box_w, box_h), 2, border_radius=10)
+
+        if self.overlay_mode == "VOL":
+            label = f"VOLUME  {self.volume}%"
+            ratio = self.volume / 100.0
+        else:
+            cur_m, cur_s = divmod(int(self.playback_time), 60)
+            tot_m, tot_s = divmod(int(self.current_track["duration"]), 60)
+            label = f"SEEK  {cur_m:02d}:{cur_s:02d} / {tot_m:02d}:{tot_s:02d}"
+            ratio = self.playback_time / float(self.current_track["duration"])
+
+        txt = self.font_tiny.render(label, True, COLOR_TEXT_WHITE)
+        self.screen_buffer.blit(txt, (box_x + 12, box_y + 8))
+
+        bar_x, bar_y, bar_w = box_x + 12, box_y + 26, box_w - 24
+        pygame.draw.rect(self.screen_buffer, (40, 48, 60), (bar_x, bar_y, bar_w, 6), border_radius=3)
+        fill_w = int(bar_w * max(0.0, min(1.0, ratio)))
+        if fill_w > 0:
+            pygame.draw.rect(self.screen_buffer, COLOR_AMBER, (bar_x, bar_y, fill_w, 6), border_radius=3)        
 
     def render_status_bar(self):
         """Top 22px Status Bar: Clock, Animated Waveform, Battery."""
@@ -534,8 +633,8 @@ class MyPodSimulator:
     def render_home_orbit(self):
         """Screen 1: Stationary Circular Hub with Morphing Track Highlighter."""
         center_x = NATIVE_WIDTH // 2
-        center_y = 150
-        orbit_radius = 65
+        center_y = 148
+        orbit_radius = 80
         total_nodes = len(HUB_ITEMS)
         step_angle = 2 * math.pi / total_nodes
 
@@ -550,8 +649,8 @@ class MyPodSimulator:
         transit_factor = math.sin(math.pi * transit_norm)
 
         # Calculate highlighter size based on transit
-        # At node: R = 19px (big ring). In transit: shrinks to R = 6px (bead along the borderline)
-        hl_radius = 19.0 - (13.0 * (transit_factor ** 0.8))
+        # At node: R = 23px (big ring). In transit: shrinks to R = 7px (bead along the borderline)
+        hl_radius = 23.0 - (16.0 * (transit_factor ** 0.8))
         aura_radius = hl_radius + 4.0 if transit_factor < 0.4 else hl_radius + 2.0
 
         # Highlighter position on the orbit track
@@ -583,7 +682,7 @@ class MyPodSimulator:
             # Nodes stay parked; target node glows brighter as highlighter arrives
             if is_target:
                 arrival_glow = 1.0 - transit_factor
-                node_r = int(13 + 3 * arrival_glow)
+                node_r = int(16 + 4 * arrival_glow)
                 # Subtle amber glow ring around target node
                 pygame.draw.circle(self.screen_buffer, (int(60 * arrival_glow), int(35 * arrival_glow), 0), (int(nx), int(ny)), node_r + 3)
                 node_color = (
@@ -593,7 +692,7 @@ class MyPodSimulator:
                 )
                 text_color = (0, 0, 0) if arrival_glow > 0.7 else COLOR_TEXT_WHITE
             else:
-                node_r = 13
+                node_r = 16
                 node_color = COLOR_CARD
                 text_color = COLOR_TEXT_MUTED
 
@@ -604,7 +703,7 @@ class MyPodSimulator:
             # Draw icon: Use image if linked, otherwise fallback to letter
             icon_img = self.icons.get(item["id"])
             if icon_img:
-                icon_size = 20 if is_target else 16
+                icon_size = 24 if is_target else 19
                 scaled_icon = pygame.transform.smoothscale(icon_img, (icon_size, icon_size))
                 self.screen_buffer.blit(scaled_icon, (int(nx) - icon_size // 2, int(ny) - icon_size // 2))
             else:
@@ -627,8 +726,8 @@ class MyPodSimulator:
 
         # 5. Center Hub Circle (Selected menu info)
         selected_item = HUB_ITEMS[self.selected_hub_index]
-        pygame.draw.circle(self.screen_buffer, (20, 24, 30), (center_x, center_y), 32)
-        pygame.draw.circle(self.screen_buffer, COLOR_AMBER, (center_x, center_y), 32, 2)
+        pygame.draw.circle(self.screen_buffer, (20, 24, 30), (center_x, center_y), 40)
+        pygame.draw.circle(self.screen_buffer, COLOR_AMBER, (center_x, center_y), 40, 2)
 
         hub_text = self.font_tiny.render(selected_item["title"], True, COLOR_AMBER)
         self.screen_buffer.blit(
@@ -638,11 +737,11 @@ class MyPodSimulator:
 
         # 6. Footer Hint
         hint = self.font_tiny.render("ROTATE TO SELECT", True, (80, 90, 105))
-        self.screen_buffer.blit(hint, (center_x - hint.get_width() // 2, NATIVE_HEIGHT - 22))
+        self.screen_buffer.blit(hint, (center_x - hint.get_width() // 2, NATIVE_HEIGHT - 18))
 
     def render_shuffle_orbit(self):
         """Smart Shuffle Radial Orbit Screen."""
-        center_x, center_y, orbit_radius = NATIVE_WIDTH // 2, 150, 65
+        center_x, center_y, orbit_radius = NATIVE_WIDTH // 2, 148, 80
         total_nodes = len(SHUFFLE_ITEMS)
         step_angle = 2 * math.pi / total_nodes
 
@@ -654,7 +753,7 @@ class MyPodSimulator:
 
         diff_to_target = abs((self.target_highlight_angle - self.highlight_angle + math.pi) % (2 * math.pi) - math.pi)
         transit_factor = math.sin(math.pi * min(1.0, diff_to_target / step_angle))
-        hl_radius = 19.0 - (13.0 * (transit_factor ** 0.8))
+        hl_radius = 23.0 - (16.0 * (transit_factor ** 0.8))
         hl_x = center_x + orbit_radius * math.cos(self.highlight_angle)
         hl_y = center_y + orbit_radius * math.sin(self.highlight_angle)
 
@@ -673,7 +772,7 @@ class MyPodSimulator:
             ang = i * step_angle - (math.pi / 2)
             nx, ny = center_x + orbit_radius * math.cos(ang), center_y + orbit_radius * math.sin(ang)
             is_target = (i == self.shuffle_index)
-            node_r = int(13 + 3 * (1.0 - transit_factor)) if is_target else 13
+            node_r = int(16 + 4 * (1.0 - transit_factor)) if is_target else 16
             node_color = COLOR_AMBER if (is_target and transit_factor < 0.25) else COLOR_CARD
             text_color = (0, 0, 0) if (is_target and transit_factor < 0.25) else COLOR_TEXT_MUTED
 
@@ -688,8 +787,8 @@ class MyPodSimulator:
             pygame.draw.circle(self.screen_buffer, COLOR_AMBER, (int(hl_x), int(hl_y)), int(hl_radius), 2)
 
         selected = SHUFFLE_ITEMS[self.shuffle_index]
-        pygame.draw.circle(self.screen_buffer, (20, 24, 30), (center_x, center_y), 32)
-        pygame.draw.circle(self.screen_buffer, COLOR_AMBER, (center_x, center_y), 32, 2)
+        pygame.draw.circle(self.screen_buffer, (20, 24, 30), (center_x, center_y), 40)
+        pygame.draw.circle(self.screen_buffer, COLOR_AMBER, (center_x, center_y), 40, 2)
         hub_text = self.font_tiny.render(selected["title"], True, COLOR_AMBER)
         self.screen_buffer.blit(hub_text, (center_x - hub_text.get_width() // 2, center_y - hub_text.get_height() // 2))
 
@@ -788,7 +887,7 @@ class MyPodSimulator:
             row_y += row_height 
 
     def render_alpha_orbit(self):
-        center_x, center_y, orbit_radius = NATIVE_WIDTH // 2, 150, 65
+        center_x, center_y, orbit_radius = NATIVE_WIDTH // 2, 148, 80
         nodes = ALPHA_PAGES[self.alpha_page]
         step_angel = 2 * math.pi / 6
 
@@ -799,7 +898,7 @@ class MyPodSimulator:
 
         diff_to_target = abs((self.target_highlight_angle - self.highlight_angle + math.pi) % (2 * math.pi) - math.pi)
         transit_factor = math.sin(math.pi * min(1.0, diff_to_target / step_angel))
-        hl_radius = 19.0 - (13.0 * (transit_factor ** 0.8))
+        hl_radius = 23.0 - (16.0 * (transit_factor ** 0.8))
         hl_x = center_x + orbit_radius * math.cos(self.highlight_angle)
         hl_y = center_y + orbit_radius * math.sin(self.highlight_angle)
 
@@ -818,7 +917,7 @@ class MyPodSimulator:
             ang = i * step_angel - (math.pi / 2)
             nx, ny = center_x + orbit_radius * math.cos(ang), center_y + orbit_radius * math.sin(ang)
             is_target = (i == self.alpha_node_index)
-            node_r = int(13 + 3 * (1.0 - transit_factor)) if is_target else 13
+            node_r = int(16 + 4 * (1.0 - transit_factor)) if is_target else 16
             node_color = COLOR_AMBER if (is_target and transit_factor < 0.25) else COLOR_CARD
             text_color = (0, 0, 0) if (is_target and transit_factor < 0.25) else COLOR_TEXT_MUTED
 
@@ -834,8 +933,8 @@ class MyPodSimulator:
             pygame.draw.circle(self.screen_buffer, COLOR_AMBER, (int(hl_x), int(hl_y)), int(hl_radius), 2)
 
         selected = nodes[self.alpha_node_index]
-        pygame.draw.circle(self.screen_buffer, (20, 24, 30), (center_x, center_y), 32)
-        pygame.draw.circle(self.screen_buffer, COLOR_AMBER, (center_x, center_y), 32, 2)
+        pygame.draw.circle(self.screen_buffer, (20, 24, 30), (center_x, center_y), 40)
+        pygame.draw.circle(self.screen_buffer, COLOR_AMBER, (center_x, center_y), 40, 2)
         hub_text = self.font_mid.render(selected, True, COLOR_AMBER)
         self.screen_buffer.blit(hub_text, (center_x - hub_text.get_width() // 2, center_y - hub_text.get_height() // 2))
 
