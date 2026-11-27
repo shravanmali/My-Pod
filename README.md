@@ -17,3 +17,20 @@ A retro, handcrafted DIY music player inspired by the classic Apple iPod, built 
 3. **MDF Wooden Enclosure:** Cut and layer the 6 sheets of 2.1mm MDF to form the pocket body.
 4. **Raspberry Pi Zero 2 W Core & Custom PCB:** Integrate the final compute core, I2S DAC, and carrier PCB.
 5. **Final Polish:** Assemble, varnish the wood, and load albums.
+
+## Quick Start
+
+### 1. Desktop Simulator
+```bash
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install pygame
+.\.venv\Scripts\python.exe simulator.py
+```
+* **Controls:** Wheel / `Up`/`Down` = Scroll • `Enter`/`Space` = Select • `V` + Wheel = Volume • `S` + Wheel = Seek • `H` = Home • `R` = 1:1 Real Size • `Backspace` = Back
+
+### 2. ESP32-S3 Hardware Prototype (MicroPython)
+1. Wire the Waveshare 1.69" LCD and KY-040 encoder using [esp32/PINOUT.md](esp32/PINOUT.md).
+2. Upload the firmware files and run (replace `COM6` with your port):
+```bash
+.\.venv\Scripts\mpremote.exe connect COM6 fs cp esp32/st7789_fb.py :st7789_fb.py + fs cp esp32/main.py :main.py + reset
+```
